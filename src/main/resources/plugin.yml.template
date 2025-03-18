@@ -1,0 +1,5 @@
+name: @PLUGIN_NAME@
+author: @AUTHOR@
+main: @PLUGIN_MAIN@
+version: @VERSION@
+api-version: @API_VERSION@

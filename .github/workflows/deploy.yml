@@ -1,0 +1,51 @@
+name: Publish Library
+
+on:
+  push:
+    branches:
+      [ main ]
+
+jobs:
+  validate-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+      - name: Tests
+        run: ./gradlew -Dfile.encoding=utf-8 check
+      - uses: octokit/graphql-action@v2.x
+        id: get_last_package
+        with:
+          query: |
+            query last_version {
+              organization(login: "vexillum-studio") {
+                packages(first: 1, names: ["com.vexillum.plugincore-gradle-plugin"]) {
+                  nodes {
+                    latestVersion {
+                      version
+                    }
+                  }
+                }
+              }
+            }
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - id: vars
+        name: Set versions
+        run: |
+          echo "current_version=$(./gradlew printVersion -q)" >> $GITHUB_ENV
+          echo "latest_version=${{ fromJson(steps.get_last_package.outputs.data).organization.packages.nodes[0].latestVersion.version }}" >> $GITHUB_ENV
+      - name: Publish to GitHub Packages
+        if: ${{ env.current_version != env.latest_version }}
+        run: ./gradlew publish
+        env:
+          GPR_USER: ${{ secrets.GPR_USER }}
+          GPR_KEY: ${{ secrets.GPR_KEY }}
