@@ -41,15 +41,6 @@ publishing {
             }
         }
     }
-    publications {
-        create<MavenPublication>("maven") {
-            groupId = "com.vexillum.plugincore"
-            artifactId = "plugin"
-            version = version
-
-            from(components["java"])
-        }
-    }
 }
 
 project.tasks.register("printVersion") {

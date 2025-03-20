@@ -19,7 +19,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           cache: 'gradle'
-      - name: Tests
+      - name: Check
         run: ./gradlew -Dfile.encoding=utf-8 check
       - uses: octokit/graphql-action@v2.x
         id: get_last_package
