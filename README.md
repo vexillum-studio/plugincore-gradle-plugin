@@ -20,7 +20,7 @@ repositories {
 In your plugins block add this:
 ````kotlin
 plugins {
-    id("com.vexillum.plugincore.plugin") version "0.0.2" // Check for the latest version released
+    id("com.vexillum.plugincore.plugin") version "0.0.3" // Check for the latest version released
 }
 
 ````

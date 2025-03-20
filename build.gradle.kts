@@ -52,6 +52,12 @@ publishing {
     }
 }
 
+project.tasks.register("printVersion") {
+    doLast {
+        println(project.version)
+    }
+}
+
 tasks.withType<KotlinCompile> {
     compilerOptions {
         jvmTarget = JvmTarget.JVM_17
