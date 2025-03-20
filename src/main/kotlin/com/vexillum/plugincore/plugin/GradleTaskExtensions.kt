@@ -1,4 +1,4 @@
-package com.vexillum.gradle.plugincore
+package com.vexillum.plugincore.plugin
 
 import org.gradle.api.tasks.JavaExec
 import org.gradle.api.tasks.testing.Test
