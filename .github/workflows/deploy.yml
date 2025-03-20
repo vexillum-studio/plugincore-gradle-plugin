@@ -27,7 +27,7 @@ jobs:
           query: |
             query last_version {
               organization(login: "vexillum-studio") {
-                packages(first: 1, names: ["com.vexillum.plugincore-gradle-plugin"]) {
+                packages(first: 1, names: ["com.vexillum.plugincore.plugin"]) {
                   nodes {
                     latestVersion {
                       version
