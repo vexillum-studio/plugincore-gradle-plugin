@@ -1,3 +1,5 @@
+import com.vexillum.plugincore.plugin.PrintVersionTask
+import com.vexillum.plugincore.plugin.vexillumRepo
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
@@ -9,11 +11,12 @@ plugins {
 }
 
 group = "com.vexillum.plugincore"
-version = "0.0.3"
+version = "0.0.5"
 
 repositories {
     mavenLocal()
     mavenCentral()
+    vexillumRepo("plugincore")
 }
 
 gradlePlugin {
@@ -43,11 +46,7 @@ publishing {
     }
 }
 
-project.tasks.register("printVersion") {
-    doLast {
-        println(project.version)
-    }
-}
+project.tasks.register("printVersion", PrintVersionTask::class.java)
 
 tasks.withType<KotlinCompile> {
     compilerOptions {

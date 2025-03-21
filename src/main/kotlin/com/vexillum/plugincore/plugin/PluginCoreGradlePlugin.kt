@@ -1,3 +1,5 @@
+@file:Suppress("unused")
+
 package com.vexillum.plugincore.plugin
 
 import java.io.File
@@ -9,7 +11,6 @@ import org.gradle.api.publish.PublishingExtension
 import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.api.tasks.bundling.Jar
 
-@Suppress("unused")
 class PluginCoreGradlePlugin : Plugin<Project> {
 
     abstract class PluginCoreExtension {
@@ -34,27 +35,40 @@ class PluginCoreGradlePlugin : Plugin<Project> {
         var spigotVersion: String?,
         val pluginYmlOutputDir: String,
         val githubURL: String?,
-        val gitHubDetails: GitHubDetails?,
-        val publish: Boolean
+        val gitHubDetails: GitHubDetails
     )
 
     private data class GitHubDetails(
+        val username: String,
+        val gprKey: String,
+        val deployDetails: DeployDetails?
+    )
+
+    private data class DeployDetails(
         val organizationName: String,
-        val repositoryName: String
+        val repositoryName: String,
+        val publish: Boolean
     )
 
     private fun PluginData.file(path: String): File =
         project.layout.projectDirectory.file(path).asFile
 
-    private fun String?.parseGitHubURL(): GitHubDetails? {
-        if (this == null) {
-            return null
-        }
-        val regex = Regex("https://github\\.com/(?<org>[^/]+)/(?<repo>[^/]+)")
-        val matchResult = regex.find(this) ?: error("GitHub URL is invalid")
+    private fun PluginCoreExtension.extractDetails(project: Project): GitHubDetails {
+        val foundGitHubURL = this.githubURL
+        val deployDetails = if (foundGitHubURL != null) {
+            val regex = Regex("https://github\\.com/(?<org>[^/]+)/(?<repo>[^/]+)")
+            val matchResult = regex.find(foundGitHubURL) ?: error("GitHub URL is invalid")
+            DeployDetails(
+                organizationName = matchResult.groups["org"]?.value!!,
+                repositoryName = matchResult.groups["repo"]?.value!!,
+                publish = publish
+            )
+        } else null
+
         return GitHubDetails(
-            organizationName = matchResult.groups["org"]?.value!!,
-            repositoryName = matchResult.groups["repo"]?.value!!
+            username = project.findProperty("gpr.user") as String? ?: System.getenv("GPR_USER") ?: error("GPR_USER not found in environment"),
+            gprKey = project.findProperty("gpr.key") as String? ?: System.getenv("GPR_KEY") ?: error("GPR_KEY not found in environment"),
+            deployDetails = deployDetails
         )
     }
 
@@ -70,10 +84,11 @@ class PluginCoreGradlePlugin : Plugin<Project> {
         project.afterEvaluate {
             println("PluginCore: Main class is set to ${extension.mainClass}")
             val data = with(extension) {
+                val gitHubDetails = extractDetails(project)
                 PluginData(
                     project = project,
                     projectName = projectName ?: project.name,
-                    author = author ?: project.findProperty("gpr.user") as? String ?: System.getenv("GPR_USER"),
+                    author = author ?: gitHubDetails.username,
                     mainClass = mainClass ?: error("`mainClass` pluginCore extension property is required"),
                     apiVersion = apiVersion ?: error("`apiVersion` pluginCore extension is required"),
                     pluginCoreVersion = pluginCoreVersion
@@ -81,8 +96,7 @@ class PluginCoreGradlePlugin : Plugin<Project> {
                     spigotVersion = spigotVersion ?: error("`spigotVersion` pluginCore extension is required"),
                     pluginYmlOutputDir = pluginYmlOutputDir ?: "src/main/resources",
                     githubURL = githubURL,
-                    gitHubDetails = githubURL.parseGitHubURL(),
-                    publish = publish
+                    gitHubDetails = gitHubDetails
                 )
             }
 
@@ -112,11 +126,7 @@ class PluginCoreGradlePlugin : Plugin<Project> {
                 dependsOn(project.tasks.named("pluginJar"))
             }
 
-            project.tasks.register("printVersion") {
-                doLast {
-                    println(project.version)
-                }
-            }
+            project.tasks.register("printVersion", PrintVersionTask::class.java)
 
             project.tasks.register("generateCIWorkflows") {
                 doLast {
@@ -136,8 +146,13 @@ class PluginCoreGradlePlugin : Plugin<Project> {
         }
     }
 
+    private fun copyResourceTo(resourcePath: String, toFile: File) {
+        toFile.mkdirs()
+        toFile.writeText(readResource(resourcePath))
+    }
+
     private fun generatePluginYml(data: PluginData) {
-        val templateContent = readResource("plugin.yml.template")
+        val templateContent = readResource("templates/plugin.yml.template")
         val outputFile = data.file("${data.pluginYmlOutputDir}/plugin.yml")
 
         val content = with(data) {
@@ -177,31 +192,31 @@ class PluginCoreGradlePlugin : Plugin<Project> {
         }
 
     private fun generateCIWorkflows(data: PluginData) {
-        val gitHubDetails = data.gitHubDetails ?: error("CI workflows needs from githubURL to be defined")
-        val githubWorkflows = data.file(".github/workflows")
+        val deployDetails = data.gitHubDetails.deployDetails ?: error("CI workflows needs from githubURL to be defined")
+        val githubWorkflows = data.file("templates/github/workflows")
         githubWorkflows.mkdirs()
-        val deployContent = readResource(".github/workflows/deploy.yml")
-            .replace("@ORG_NAME@", gitHubDetails.organizationName)
+        val deployContent = readResource("templates/github/workflows/deploy.yml")
+            .replace("@ORG_NAME@", deployDetails.organizationName)
             .replace("@PACKAGE@", "${data.project.group}.${data.project.name.lowercase()}")
         val deployFile = githubWorkflows.resolve("deploy.yml")
         deployFile.writeText(deployContent)
-        println("Generated deploy.yml at: ${deployFile.absolutePath}")
-        val prContent = readResource(".github/workflows/pr.yml")
+        println("Generated workflow file deploy.yml at: ${deployFile.absolutePath}")
         val prFile = githubWorkflows.resolve("pr.yml")
-        prFile.writeText(prContent)
+        copyResourceTo("templates/github/workflows/pr.yml", prFile)
+        println("Generated workflow file pr.yml at: ${deployFile.absolutePath}")
     }
 
     private fun applyPublication(data: PluginData) {
-        val githubDetails = data.gitHubDetails
-        if (githubDetails == null || !data.publish) {
+        val deployDetails = data.gitHubDetails.deployDetails
+        if (deployDetails == null || !deployDetails.publish) {
             return
         }
         data.project.plugins.apply("maven-publish")
         data.project.extensions.configure(PublishingExtension::class.java) {
             repositories {
                 data.project.githubMavenRepo(
-                    repositoryName = githubDetails.repositoryName,
-                    organizationName = githubDetails.organizationName
+                    repositoryName = deployDetails.repositoryName,
+                    organizationName = deployDetails.organizationName
                 )
             }
             publications {
